@@ -1,0 +1,77 @@
+"""
+Created on Sat Aug 08 12:20:45 2020
+
+@authors: Labdaps team (http://www.fsp.usp.br/labdaps/)
+"""
+
+#1) Read cleaned and preprocessed CSV
+dataset = pd.read_csv("file.csv", delimiter=";",index_col=0)
+df_bp = pd.DataFrame(dataset)
+
+df_bp.shape
+
+#1.1) Check outcome proportion
+df_bp['icu'].value_counts()
+
+#1.2) set class 
+df_bp['class'] = df_bp['icu'].astype('int')
+
+df_bp = df_bp.drop(['icu'],axis=1)
+df_bp.head()
+
+# 2) Remove non-used outcomes to avoid data leakage
+
+df_bp = df_bp.drop(['mv'],axis=1)
+df_bp = df_bp.drop(['death'],axis=1)
+
+# 2.1) Prepare Experiment
+#Using imputation by median on numeric variables and random under sampling
+#Forced some categories due to MLFlow doesn't recognize all at once
+
+exp = setup(df_bp, target='class'
+            , categorical_features = ['sex','race']
+            , numeric_features = ['basophils','braden']
+            , normalize=True
+            #, remove_multicollinearity=True
+            ,numeric_imputation='median'
+#             ,numeric_imputation='ignore'
+            #,multicollinearity_threshold=0.9
+            , resample=True
+            , resample_method='random_under'
+           )
+
+X, y, X_train, X_test, y_train, y_test, seed, prep_pipe, _ = exp
+X_test.shape
+
+# 2.2) Filtering only 5 pre-selected models
+#Catboost, XGBoost, Extra Trees, Random Forests and MLP
+compare_models(blacklist = ["lr","knn","nb","dt","svm","rbfsvm","gpc","ridge","qda","ada","gbc","lda","lightgbm"] , turbo = False)
+
+# 2.2.1) Tune models
+cattuned = tune_model('catboost', optimize='AUC', n_iter=20)
+mlptuned = tune_model('mlp', optimize='AUC', n_iter=20)
+ettuned = tune_model('et', optimize='AUC', n_iter=20)
+rftuned = tune_model('rf', optimize='AUC', n_iter=20)
+xgbtuned = tune_model('xgboost', optimize='AUC', n_iter=20)
+
+# 2.3) Select best algorithm based on AUROC
+#MLFlow predicts on X_test
+preds = predict_model(ettuned) 
+preds = predict_model(cattuned)
+preds = predict_model(rftuned)
+preds = predict_model(xgbtuned)
+
+# 2.4) interpret models
+interpret_model(rftuned)
+
+# 2.5) Finalize model
+final_model = finalize_model(rftuned)
+
+# 3) Using model to predict unseen outcome
+preds = predict_model(rftuned)
+preds
+
+#Check performance on test dataset (AUC, PPV, Recall, Precision, Specificity)
+binary_classification_metrics(y_test, preds['Label'], preds['Score'])
+
+# 4) Generate ROC curves ommited
