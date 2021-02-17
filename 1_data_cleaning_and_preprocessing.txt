@@ -1,0 +1,97 @@
+"""
+Created on Sat Aug 08 12:20:45 2020
+
+@authors: Labdaps team (http://www.fsp.usp.br/labdaps/)
+"""
+
+# 1)Prepare Dataset
+# 1.1)Import python libraries
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import os
+import numpy as np
+
+pd.set_option('display.float_format', lambda x: '%.3f' % x)
+
+# 1.1.1) Import MLFlow libraries
+from MLFlow_Classification import *
+from MLFlow_Utils import *
+
+# 1.2) Load dataset
+dataset = pd.read_csv("file.csv", delimiter=";", decimal=",")
+df_bp = pd.DataFrame(dataset)
+
+# 1.3) Filtering only positive cases (infected patients)
+df_bp = df_bp[df_bp.pcr_covid==1]
+df_bp.shape
+
+# 1.4) Check for duplicates
+pd.set_option('display.max_columns', None)
+ids = df_bp["cd_paciente"]
+df_bp[ids.isin(ids[ids.duplicated()])].sort_values(by='cd_paciente')
+
+# 1.5) Check missing variables
+idx_columns_missing = df_bp.columns[df_bp.isnull().mean() > 0.90].values
+idx_columns_missing
+
+# 1.6) Drop variables with above 90%
+df_bp = df_bp.drop(columns=idx_columns_missing, axis=1)
+df_bp.shape
+
+# 1.7) removed fixed variables 
+#Code ommitted to avoid leaking hospital identification
+
+
+# 1.8) Preprocessing
+df_bp.raca = df_bp.raca.astype('category')
+
+# 1.8.1) Checking High correlated variables
+df_bp_num = df_bp.select_dtypes(include = ['float64','int64'])
+df_bp_num.columns
+
+corr = df_bp_num.corr().abs()
+
+corr_ordered = (corr.where(np.triu(np.ones(corr.shape), k=1).astype(np.bool))
+                 .stack()
+                 .sort_values(ascending=False))
+
+corr_ordered[corr_ordered>0.9]
+
+# 1.8.2)Drop high correlated variables
+df_bp = df_bp.drop(['sys_dias_mean'],axis=1) #Removed due to be mean between sys_press and dias_press
+df_bp = df_bp.drop(['bilirubin_total'],axis=1) # Same as above criteria
+df_bp = df_bp.drop(['ckmb'],axis=1) # used troponin (cardio)
+
+df_bp = df_bp.drop(['neutrophil'],axis=1) # Already in neutrophil/limphocyte
+df_bp = df_bp.drop(['hematocrit'],axis=1) 
+
+# 1.8.3)Removed unrelated outcomes
+#ommitted due to not pertinent to article
+df_bp.columns
+
+
+# 1.9)Joining multiple outcomes into single outcome
+#PS: Change outcomes for other combinations
+outcome1='icu'
+outcome2='mv'
+
+severe_outcome_combination = 'severeoutcomes_except_death'
+
+def joinCategories(row):
+    if row[outcome1]==1 or row[outcome2]==1:
+        val = 1
+    else:
+        val = 0
+    return val
+
+df_bp[severe_outcome_combination] = df_bp.apply(joinCategories, axis=1)
+df_bp[severe_outcome_combination].value_counts()
+
+#check outcome proportion
+df_bp.severe_outcome_combination.value_counts()
+
+
+#1.10) Exploratory analysis
+#Histograms, boxplots ommited
+
