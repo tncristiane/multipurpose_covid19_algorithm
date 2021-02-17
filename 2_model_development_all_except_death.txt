@@ -10,8 +10,7 @@ df_bp = pd.DataFrame(dataset)
 
 df_bp.shape
 
-#1.1) Fill outcome NAs with zeros
-df_bp['severe_outcome_combination'] = df_bp['severe_outcome_combination'].fillna(0)
+#1.1) Check outcome proportion
 df_bp['severe_outcome_combination'].value_counts()
 
 #1.2) set class 
